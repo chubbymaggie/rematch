@@ -1,9 +1,10 @@
 from rest_framework import viewsets, permissions, mixins
-from collab.models import Project, File, Task, Instance, Vector, Match
+from collab.models import (Project, File, FileVersion, Task, Instance, Vector,
+                           Match)
 from collab.serializers import (ProjectSerializer, FileSerializer,
-                                TaskSerializer, TaskEditSerializer,
-                                InstanceSerializer, VectorSerializer,
-                                MatchSerializer)
+                                FileVersionSerializer, TaskSerializer,
+                                TaskEditSerializer, InstanceSerializer,
+                                VectorSerializer, MatchSerializer)
 from collab.permissions import IsOwnerOrReadOnly
 from collab import tasks
 
@@ -40,6 +41,13 @@ class FileViewSet(ViewSetOwnerMixin, viewsets.ModelViewSet):
                    'md5hash')
 
 
+class FileVersionViewSet(viewsets.ModelViewSet):
+  queryset = FileVersion.objects.all()
+  serializer_class = FileVersionSerializer
+  permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+  filter_fields = ('id', 'file', 'md5hash')
+
+
 class TaskViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin,
                   mixins.DestroyModelMixin, mixins.ListModelMixin,
                   viewsets.GenericViewSet):
@@ -70,15 +78,16 @@ class InstanceViewSet(ViewSetManyAllowedMixin, ViewSetOwnerMixin,
                       viewsets.ModelViewSet):
   queryset = Instance.objects.all()
   serializer_class = InstanceSerializer
-  filter_fields = ('owner', 'file', 'type')
+  filter_fields = ('owner', 'file_version', 'type')
 
 
 class VectorViewSet(ViewSetManyAllowedMixin, viewsets.ModelViewSet):
   queryset = Vector.objects.all()
   serializer_class = VectorSerializer
   permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
-  filter_fields = ('instance', 'file', 'type', 'type_version')
+  filter_fields = ('instance', 'file_version', 'type', 'type_version')
 
   @staticmethod
   def perform_create(serializer):
-    serializer.save(file=serializer.validated_data['instance'].file)
+    file_version = serializer.validated_data['instance'].file_version
+    serializer.save(file_version=file_version)

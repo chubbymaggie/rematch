@@ -4,22 +4,24 @@ from functools import partial
 from rest_framework import status
 
 from django.db import models
-from collab.models import Project, File, Task, Instance, Vector
+from collab.models import Project, File, FileVersion, Task, Instance, Vector
 
 
 collab_models = {'projects': {'name': 'test_project_1', 'private': False,
                               'description': 'description_1', 'files': []},
-                 'files': {'instances': [], 'md5hash': 'H' * 32,
-                           'name': 'file1', 'description': 'desc1'},
-                 'tasks': {'source_file': 1, 'target_project': 1},
-                 'instances': {'offset': 0, 'type': 'function', 'file': 1,
-                               'vectors': []},
-                 'vectors': {'instance': 1, 'type': 'hash', 'type_version': 0,
+                 'files': {'md5hash': 'H' * 32, 'name': 'file1',
+                           'description': 'desc1'},
+                 'file_versions': {'md5hash': 'J' * 32},
+                 'tasks': {},
+                 'instances': {'offset': 0, 'type': 'function', 'vectors': []},
+                 'vectors': {'type': 'hash', 'type_version': 0,
                              'data': 'data'}}
 
 collab_model_objects = {'projects': partial(Project, private=False),
                         'files': partial(File, name='name', description='desc',
                                          md5hash='H' * 32),
+                        'file_versions': partial(FileVersion,
+                                                 md5hash='J' * 32),
                         'tasks': Task,
                         'instances': partial(Instance, offset=0),
                         'vectors': partial(Vector, type='hash', data='data',
@@ -27,11 +29,12 @@ collab_model_objects = {'projects': partial(Project, private=False),
 
 collab_model_reqs = {'projects': {},
                      'files': {},
+                     'file_versions': {'file': 'files'},
                      'tasks': {'target_project': 'projects',
-                               'source_file': 'files'},
-                     'instances': {'file': 'files'},
-                     'vectors': {'file': 'files',
-                                 'instance': 'instances'}}
+                               'source_file_version': 'file_versions'},
+                     'instances': {'file_version': 'file_versions'},
+                     'vectors': {'instance': 'instances',
+                                 'file_version': 'file_versions'}}
 
 
 def resolve_reqs(model_name, user):
@@ -56,7 +59,7 @@ def create_model(model_name, user, base_obj=None):
   for req_field, obj in resolve_reqs(model_name, user):
     base_obj.__setattr__(req_field, obj)
 
-  print(base_obj)
+  print("base_obj", base_obj)
   return base_obj
 
 
@@ -66,7 +69,7 @@ def setup_model(model_name, user):
   for req_field, obj in resolve_reqs(model_name, user):
     model_dict[req_field] = obj.id
 
-  print(model_dict)
+  print("model_dict", model_dict)
   return model_dict
 
 
@@ -119,8 +122,10 @@ def test_model_guest_list(client, admin_user, model_name):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('model_name, model_data', collab_models.items())
-def test_model_guest_creation(client, model_name, model_data):
+@pytest.mark.parametrize('model_name', collab_models.keys())
+def test_model_guest_creation(client, admin_user, model_name):
+  model_data = setup_model(model_name, admin_user)
+
   response = client.post('/collab/{}/'.format(model_name),
                          data=json.dumps(model_data),
                          content_type="application/json")
@@ -128,9 +133,8 @@ def test_model_guest_creation(client, model_name, model_data):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('model_name, model_data', collab_models.items())
-def test_model_creation(client, admin_client, admin_user, model_name,
-                        model_data):
+@pytest.mark.parametrize('model_name', collab_models.keys())
+def test_model_creation(client, admin_client, admin_user, model_name):
   model_data = setup_model(model_name, admin_user)
 
   response = admin_client.post('/collab/{}/'.format(model_name),
