@@ -2,6 +2,7 @@ import itertools
 import json
 import time
 
+import numpy as np
 import sklearn as skl
 import sklearn.metrics  # noqa flake8 importing as a different name
 import sklearn.preprocessing  # noqa flake8 importing as a different name
@@ -46,8 +47,10 @@ class HistogramMatch(match.Match):
     distance_matrix = skl.metrics.pairwise.euclidean_distances(source_matrix,
                                                                target_matrix)
     print("distance time: {}".format(time.time() - start))
+    print("min distance: {}".format(distance_matrix.min()))
+    print("max distance: {}".format(distance_matrix.max()))
 
-    for source_i, target_i in itertools.izip(*(distance_matrix<0.5).nonzero()):
+    for source_i, target_i in np.ndindex(*distance_matrix.shape):
       source_id = source_ids[source_i]
       source_instance_id = source_instance_ids[source_i]
 
