@@ -37,8 +37,9 @@ class File(models.Model):
 
 
 class FileVersion(models.Model):
+  created = models.DateTimeField(auto_now_add=True)
   file = models.ForeignKey(File, related_name='versions')
-  md5hash = models.CharField(max_length=32, db_index=True,
+  md5hash = models.CharField(max_length=32, unique=True,
                              validators=[MinLengthValidator(32)])
 
   def __unicode__(self):
@@ -85,6 +86,7 @@ class Vector(models.Model):
                   (TYPE_OPCODE_HIST, "Opcode Histogram"))
 
   instance = models.ForeignKey(Instance, related_name='vectors')
+  file = models.ForeignKey(File, related_name='vectors')
   file_version = models.ForeignKey(FileVersion, related_name='vectors')
   type = models.CharField(max_length=16, choices=TYPE_CHOICES)
   type_version = models.IntegerField()

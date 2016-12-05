@@ -4,8 +4,10 @@ import idautils
 from ..dialogs.match import MatchDialog
 
 from .. import instances
-from .. import network, netnode
+from .. import network, netnode, logger
 from . import base
+
+import hashlib
 
 
 class MatchAction(base.BoundFileAction):
@@ -18,6 +20,7 @@ class MatchAction(base.BoundFileAction):
     self.pbar = None
     self.timer = None
     self.task_id = None
+    self.file_version_id = None
     self.instance_set = []
 
     self.source = None
@@ -27,6 +30,18 @@ class MatchAction(base.BoundFileAction):
     self.target_project = None
     self.target_file = None
     self.methods = None
+
+  @staticmethod
+  def calc_file_version_hash():
+    version_obj = {}
+    version_obj['functions'] = {offset: list(idautils.Chunks(offset))
+                                  for offset in idautils.Functions()}
+    version_str = repr(version_obj)
+    version_hash = hashlib.md5(version_str).hexdigest()
+
+    logger('match_action').info("file version string: {}".format(version_str))
+    logger('match_action').info("file version hash: {}".format(version_hash))
+    return version_hash
 
   def get_functions(self):
     if self.source == 'idb':
@@ -52,6 +67,14 @@ class MatchAction(base.BoundFileAction):
     self.target_project = target_project if target == 'project' else None
     self.target_file = target_file if target == 'file' else None
     self.methods = methods
+
+    file_version_hash = self.calc_file_version_hash()
+    uri = "collab/files/{}/file_version/{}/".format(netnode.bound_file_id,
+                                                    file_version_hash)
+    return network.QueryWorker("POST", uri, json=True)
+
+  def response_handler(self, file_version):
+    self.file_version_id = file_version['id']
 
     self.functions = self.get_functions()
     if not self.functions:
@@ -80,7 +103,7 @@ class MatchAction(base.BoundFileAction):
       return
 
     try:
-      func = instances.FunctionInstance(netnode.bound_file_id, offset)
+      func = instances.FunctionInstance(self.file_version_id, offset)
       self.instance_set.append(func.serialize())
 
       if len(self.instance_set) >= 100:
@@ -123,6 +146,7 @@ class MatchAction(base.BoundFileAction):
                                 "creation")
 
     params = {'source_file': netnode.bound_file_id,
+              'source_file_version': self.file_version_id,
               'source_start': self.source_range[0],
               'source_end': self.source_range[1],
               'target_project': self.target_project,

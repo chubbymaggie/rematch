@@ -1,4 +1,5 @@
-from rest_framework import viewsets, permissions, mixins
+from rest_framework import (viewsets, permissions, mixins, decorators, status,
+                            response)
 from collab.models import (Project, File, FileVersion, Task, Instance, Vector,
                            Match)
 from collab.serializers import (ProjectSerializer, FileSerializer,
@@ -31,14 +32,33 @@ class ViewSetManyAllowedMixin(object):
 class ProjectViewSet(ViewSetOwnerMixin, viewsets.ModelViewSet):
   queryset = Project.objects.all()
   serializer_class = ProjectSerializer
+  permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
   filter_fields = ('created', 'owner', 'name', 'description', 'private')
 
 
 class FileViewSet(ViewSetOwnerMixin, viewsets.ModelViewSet):
   queryset = File.objects.all()
   serializer_class = FileSerializer
+  permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
   filter_fields = ('created', 'owner', 'project', 'name', 'description',
                    'md5hash')
+
+  @decorators.detail_route(url_path="file_version/(?P<md5hash>[0-9A-Fa-f]+)",
+                           methods=['GET', 'POST'])
+  def file_version(self, request, pk, md5hash):
+    del pk
+    file = self.get_object()
+
+    if request.method == 'POST':
+      file_version, created = \
+        FileVersion.objects.get_or_create(md5hash=md5hash, file=file)
+      resp_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    else:
+      file_version = FileVersion.objects.get(md5hash=md5hash, file=file)
+      resp_status = status.HTTP_200_OK
+
+    serializer = FileVersionSerializer(file_version)
+    return response.Response(serializer.data, status=resp_status)
 
 
 class FileVersionViewSet(viewsets.ModelViewSet):

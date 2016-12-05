@@ -26,7 +26,7 @@ class FileSerializer(serializers.ModelSerializer):
 class FileVersionSerializer(serializers.ModelSerializer):
   class Meta:
     model = FileVersion
-    fields = ('id', 'file', 'md5hash')
+    fields = ('id', 'created', 'file', 'md5hash')
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -76,7 +76,8 @@ class InstanceSerializer(serializers.ModelSerializer):
     file_version = validated_data['file_version']
 
     obj = self.Meta.model.objects.create(**validated_data)
-    vectors = (Vector(instance=obj, file_version=file_version, **vector_data)
+    vectors = (Vector(instance=obj, file_version=file_version,
+                      file=file_version.file, **vector_data)
                for vector_data in vectors_data)
     Vector.objects.bulk_create(vectors)
     return obj

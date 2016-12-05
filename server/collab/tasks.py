@@ -16,8 +16,9 @@ def match(task_id):
                 task_id=match.request.id)
 
     # get input parameters
-    task_values = task.values_list('id', 'source_file_id', 'source_start',
-                                   'source_end', 'source_file_verison_id',
+    task_values = task.values_list('id', 'source_file_version__file_id',
+                                   'source_start', 'source_end',
+                                   'source_file_version_id',
                                    'target_project_id', 'target_file_id')[0]
     print(task_values)
     (task_id, source_file, source_start, source_end, source_file_version,
