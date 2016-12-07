@@ -6,6 +6,13 @@ from rest_framework import status
 from django.db import models
 from collab.models import Project, File, FileVersion, Task, Instance, Vector
 
+import random
+import string
+
+
+def rand_hash(n):
+  return ''.join(random.choice(string.ascii_uppercase) for _ in range(n))
+
 
 collab_models = {'projects': {'name': 'test_project_1', 'private': False,
                               'description': 'description_1', 'files': []},
@@ -20,22 +27,22 @@ collab_models = {'projects': {'name': 'test_project_1', 'private': False,
 collab_model_objects = {'projects': partial(Project, private=False),
                         'files': partial(File, name='name', description='desc',
                                          md5hash='H' * 32),
-                        'file_versions': partial(FileVersion,
-                                                 md5hash='K' * 32),
+                        'file_versions': partial(FileVersion),
                         'tasks': Task,
                         'instances': partial(Instance, offset=0),
                         'vectors': partial(Vector, type='hash', data='data',
-                                           type_version=0)}
+                                           type_version=0),
+                        'rand_hash': rand_hash(32)}
 
 collab_model_reqs = {'projects': {},
                      'files': {},
-                     'file_versions': {'file': 'files'},
+                     'file_versions': {'file': 'files',
+                                       'md5hash': 'rand_hash'},
                      'tasks': {'target_project': 'projects',
                                'source_file_version': 'file_versions'},
                      'instances': {'file_version': 'file_versions'},
                      'vectors': {'instance': 'instances',
                                  'file_version': 'file_versions'}}
-
 
 def resolve_reqs(model_name, user):
   model_reqs = collab_model_reqs[model_name]
