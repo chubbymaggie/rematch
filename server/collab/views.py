@@ -52,13 +52,16 @@ class FileViewSet(ViewSetOwnerMixin, viewsets.ModelViewSet):
     if request.method == 'POST':
       file_version, created = \
         FileVersion.objects.get_or_create(md5hash=md5hash, file=file)
-      resp_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     else:
       file_version = FileVersion.objects.get(md5hash=md5hash, file=file)
-      resp_status = status.HTTP_200_OK
+      created = False
 
     serializer = FileVersionSerializer(file_version)
-    return response.Response(serializer.data, status=resp_status)
+
+    resp_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    response_data = serializer.data
+    response_data['created'] = created
+    return response.Response(response_data, status=resp_status)
 
 
 class FileVersionViewSet(viewsets.ModelViewSet):

@@ -61,6 +61,14 @@ class MatchAction(base.BoundFileAction):
   def response_handler(self, file_version):
     self.file_version_id = file_version['id']
 
+    if file_version['created']:
+      self.start_upload()
+    else:
+      self.start_task()
+
+    return True
+
+  def start_upload(self):
     self.functions = set(idautils.Functions())
 
     self.pbar = QtWidgets.QProgressDialog()
@@ -117,7 +125,9 @@ class MatchAction(base.BoundFileAction):
 
   def accept_upload(self):
     self.cancel_upload()
+    self.start_task()
 
+  def start_task(self):
     if self.source == 'idb':
       self.source_range = [None, None]
     elif self.source == 'single':
