@@ -43,21 +43,6 @@ class MatchAction(base.BoundFileAction):
     logger('match_action').info("file version hash: {}".format(version_hash))
     return version_hash
 
-  def get_functions(self):
-    if self.source == 'idb':
-      return set(idautils.Functions())
-    elif self.source == 'user':
-      raise NotImplementedError("All user functions are not currently "
-                                "supported as source value.")
-    elif self.source == 'single':
-      return set([self.source_single])
-    elif self.source == 'range':
-      return set(idautils.Functions(self.source_range[0],
-                                    self.source_range[1]))
-
-    raise ValueError("Invalid source value received from MatchDialog: {}"
-                     "".format(self.source))
-
   def submit_handler(self, source, source_single, source_range, target,
                      target_project, target_file, methods):
     self.source = source
@@ -76,9 +61,7 @@ class MatchAction(base.BoundFileAction):
   def response_handler(self, file_version):
     self.file_version_id = file_version['id']
 
-    self.functions = self.get_functions()
-    if not self.functions:
-      return False
+    self.functions = set(idautils.Functions())
 
     self.pbar = QtWidgets.QProgressDialog()
     self.pbar.setLabelText("Processing IDB... You may continue working,\nbut "
