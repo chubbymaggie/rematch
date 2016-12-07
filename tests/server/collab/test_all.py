@@ -32,7 +32,7 @@ collab_model_objects = {'projects': partial(Project, private=False),
                         'instances': partial(Instance, offset=0),
                         'vectors': partial(Vector, type='hash', data='data',
                                            type_version=0),
-                        'rand_hash': rand_hash(32)}
+                        'rand_hash': partial(rand_hash, 32)}
 
 collab_model_reqs = {'projects': {},
                      'files': {},
@@ -42,7 +42,9 @@ collab_model_reqs = {'projects': {},
                                'source_file_version': 'file_versions'},
                      'instances': {'file_version': 'file_versions'},
                      'vectors': {'instance': 'instances',
-                                 'file_version': 'file_versions'}}
+                                 'file_version': 'file_versions',
+                                 'file': 'files'}}
+
 
 def resolve_reqs(model_name, user):
   model_reqs = collab_model_reqs[model_name]
@@ -52,19 +54,22 @@ def resolve_reqs(model_name, user):
 
     create_model(req_model, user, base_obj=obj)
 
-    obj.owner = user
-    obj.save()
-    print("Created model: {} ({}) at {}".format(obj, obj.id, req_field))
+    if isinstance(obj, models.Model):
+      obj.owner = user
+      obj.save()
+      print("Created model: {} ({}) at {}".format(obj, obj.id, req_field))
     yield req_field, obj
 
 
 def create_model(model_name, user, base_obj=None):
   if base_obj is None:
     base_obj = collab_model_objects[model_name]()
-  base_obj.owner = user
 
-  for req_field, obj in resolve_reqs(model_name, user):
-    base_obj.__setattr__(req_field, obj)
+  if isinstance(base_obj, models.Model):
+    base_obj.owner = user
+
+    for req_field, obj in resolve_reqs(model_name, user):
+      base_obj.__setattr__(req_field, obj)
 
   print("base_obj", base_obj)
   return base_obj
@@ -74,7 +79,10 @@ def setup_model(model_name, user):
   model_dict = collab_models[model_name]
 
   for req_field, obj in resolve_reqs(model_name, user):
-    model_dict[req_field] = obj.id
+    if isinstance(obj, models.Model):
+      model_dict[req_field] = obj.id
+    else:
+      model_dict[req_field] = obj
 
   print("model_dict", model_dict)
   return model_dict

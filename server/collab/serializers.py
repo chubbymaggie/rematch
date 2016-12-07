@@ -91,6 +91,10 @@ class VectorSerializer(serializers.ModelSerializer):
     fields = ('id', 'file', 'file_version', 'instance', 'type', 'type_version',
               'data')
 
+  def create(self, validated_data):
+    file = validated_data['file_version'].file
+    return self.Meta.model.objects.create(file=file, **validated_data)
+
 
 class MatchSerializer(serializers.ModelSerializer):
   class Meta:
