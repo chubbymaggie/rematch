@@ -28,27 +28,25 @@ class HistogramMatch(match.Match):
     source_list = [json.loads(d) for d in source_data]
     target_list = [json.loads(d) for d in target_data]
     print("load time: {}".format(time.time() - start))
-    print(source_list[:5])
-    print(target_list[:5])
+    print("Source input sample:\t{}".format(source_list[:5]))
+    print("Source input sample:\t{}".format(target_list[:5]))
 
     dictvect = skl.feature_extraction.DictVectorizer()
     source_matrix = dictvect.fit_transform(source_list)
     target_matrix = dictvect.transform(target_list)
     print("vectorization time: {}".format(time.time() - start))
-    print(source_matrix.shape)
-    print(target_matrix.shape)
+    print("source matrix: {}, target matrix: {}".format(source_matrix.shape,
+                                                        target_matrix.shape))
 
     source_matrix = skl.preprocessing.normalize(source_matrix, norm='l2')
     target_matrix = skl.preprocessing.normalize(target_matrix, norm='l2')
     print("norm time: {}".format(time.time() - start))
-    print(type(source_matrix))
-    print(type(target_matrix))
 
     distance_matrix = skl.metrics.pairwise.euclidean_distances(source_matrix,
                                                                target_matrix)
     print("distance time: {}".format(time.time() - start))
-    print("min distance: {}".format(distance_matrix.min()))
-    print("max distance: {}".format(distance_matrix.max()))
+    print("min distance: {}, max distance: {}".format(distance_matrix.min(),
+                                                      distance_matrix.max()))
 
     for source_i, target_i in np.ndindex(*distance_matrix.shape):
       source_id = source_ids[source_i]
