@@ -49,12 +49,12 @@ def match(task_id):
 
       source_count = source_vectors.count()
       target_count = target_vectors.count()
+      print("Matching {} local vectors to {} remote vectors by {}"
+            "".format(source_count, target_count, match_type))
       if source_count and target_count:
         match_objs = list(gen_match_objs(task_id, match_type, source_vectors,
                                          target_vectors))
-        print("Matching {} local vectors to {} remote vectors by {} yielded "
-              "{} matches".format(source_count, target_count, match_type,
-                                  len(match_objs)))
+        print("Yielded {} matches".format(len(match_objs)))
         Match.objects.bulk_create(match_objs, batch_size=10000)
       print("\tTook: {}".format(now() - start))
 

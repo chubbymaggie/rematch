@@ -165,11 +165,11 @@ class MatchResultDialog(base.BaseDialog):
 
     matches_url = "collab/tasks/{}/matches/".format(self.task_id)
     network.delayed_query("GET", matches_url, json=True, paginate=True,
-                          params={'limit': 100}, callback=self.handle_matches)
+                          params={'limit': 10}, callback=self.handle_matches)
 
     remotes_url = "collab/tasks/{}/remotes/".format(self.task_id)
     network.delayed_query("GET", remotes_url, json=True, paginate=True,
-                          params={'limit': 100}, callback=self.handle_remotes)
+                          params={'limit': 10}, callback=self.handle_remotes)
 
   def handle_matches(self, response):
     new_locals = {obj['id']: obj for obj in response['results']}

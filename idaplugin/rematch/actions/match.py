@@ -99,7 +99,7 @@ class MatchAction(base.BoundFileAction):
       func = instances.FunctionInstance(self.file_version_id, offset)
       self.instance_set.append(func.serialize())
 
-      if len(self.instance_set) >= 100:
+      if len(self.instance_set) >= 10:
         network.delayed_query("POST", "collab/instances/",
                               params=self.instance_set, json=True,
                               callback=self.progress_advance)
