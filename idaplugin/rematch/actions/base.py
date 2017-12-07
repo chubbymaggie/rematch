@@ -1,30 +1,47 @@
-from .. import user, logger, netnode, utils
+from .. import user, log, netnode, utils
 
-import idaapi
+import ida_kernwin
 import idc
 
 
-class Action(idaapi.action_handler_t):
-  """Actions are objects registered to IDA's interface and added to the
-  rematch menu and toolbar"""
-  dialog = None
-
+class Action(object):
   reject_handler = None
+  accept_handler = None
   finish_handler = None
   submit_handler = None
   response_handler = None
   exception_handler = None
 
-  def __init__(self):
-    self._icon = None
-    self.dlg = None
+  def __init__(self, ui_class):
+    super(Action, self).__init__()
+    self.ui_class = ui_class
+    self.ui = None
 
   def __repr__(self):
-    return "<Action: {}>".format(self.get_id())
+    return "<Action: {}>".format(self.ui_class)
+
+  def running(self):
+    return self.ui is not None
+
+
+class IDAAction(Action, ida_kernwin.action_handler_t):
+  """Actions are objects registered to IDA's interface and added to the
+  rematch menu and toolbar"""
+
+  def __init__(self, *args, **kwargs):
+    super(IDAAction, self).__init__(*args, **kwargs)
+    self._icon = None
+
+  def __repr__(self):
+    return "<{}: {}>".format(self.__class__.__name__, self.ui_class)
 
   def __del__(self):
-    if self._icon:
-      idaapi.free_custom_icon(self._icon)
+    try:
+      super(IDAAction, self).__del__()
+      if self._icon:
+        ida_kernwin.free_custom_icon(self._icon)
+    except AttributeError:
+      pass
 
   def get_name(self):
     return self.name
@@ -52,12 +69,12 @@ class Action(idaapi.action_handler_t):
 
   def get_icon(self):
     if not self._icon:
-      image_path = utils.getPluginPath('images', self.get_id() + ".png")
-      self._icon = idaapi.py_load_custom_icon_fn(image_path)
+      image_path = utils.get_plugin_path('images', self.get_id() + ".png")
+      self._icon = ida_kernwin.py_load_custom_icon_fn(image_path)
     return self._icon
 
   def get_desc(self):
-    return idaapi.action_desc_t(
+    return ida_kernwin.action_desc_t(
       self.get_id(),
       self.get_text(),
       self,
@@ -81,42 +98,57 @@ class Action(idaapi.action_handler_t):
 
     return '/'.join(t)
 
-  @classmethod
-  def register(cls):
-    action = cls()
-    r = idaapi.register_action(action.get_desc())
+  def register(self):
+    r = ida_kernwin.register_action(self.get_desc())
     if not r:
-      logger('actions').warn("failed registering {}: {}".format(cls, r))
+      log('actions').warn("failed registering %s: %s", self, r)
       return
-    idaapi.attach_action_to_menu(
-        action.get_action_path(),
-        action.get_id(),
-        idaapi.SETMENU_APP)
-    r = idaapi.attach_action_to_toolbar(
+    ida_kernwin.attach_action_to_menu(
+        self.get_action_path(),
+        self.get_id(),
+        ida_kernwin.SETMENU_APP)
+    r = ida_kernwin.attach_action_to_toolbar(
         "AnalysisToolBar",
-        action.get_id())
+        self.get_id())
     if not r:
-      logger('actions').warn("registration of {} failed: {}".format(cls, r))
-    return action
+      log('actions').warn("registration of %s failed: %s", self, r)
 
   def update(self, ctx):
-    return idaapi.AST_ENABLE if self.enabled(ctx) else idaapi.AST_DISABLE
+    if self.enabled(ctx):
+      return ida_kernwin.AST_ENABLE
+    else:
+      return ida_kernwin.AST_DISABLE
 
   def activate(self, ctx):
-    if callable(self.dialog):
-      self.dlg = self.dialog(reject_handler=self.reject_handler,
-                             submit_handler=self.submit_handler,
-                             response_handler=self.response_handler,
-                             exception_handler=self.exception_handler)
-      if self.finish_handler:
-        self.dlg.finished.connect(self.finish_handler)
-      self.dlg.finished.connect(self.force_update)
-      self.dlg.show()
+    del ctx
+    if self.running():
+      return
+
+    if callable(self.ui_class):
+      self.ui = self.ui_class(accept_handler=self.accept_handler,
+                              reject_handler=self.reject_handler,
+                              finish_handler=self.finish_handler,
+                              submit_handler=self.submit_handler,
+                              response_handler=self.response_handler,
+                              exception_handler=self.exception_handler)
+      self.ui.finished.connect(self.close_dialog)
+      self.ui.show()
     else:
-      logger('actions').warn("{}: no activation".format(self.__class__))
-      logger('actions').debug(map(str, (ctx.form, ctx.form_type,
-                                        ctx.form_title, ctx.chooser_selection,
-                                        ctx.action, ctx.cur_flags)))
+      raise NotImplementedError("activation called on an action class with no "
+                                "ui_class defined")
+
+  def close_dialog(self):
+    """Destruction and cleanup of dialog bound to action on activation
+
+    This is called when dialog is finished for whatever reason, It is
+    guerenteed to be called after `self.finish_handler` due to slot execution
+    order since Qt4.6"""
+    log('action_base').info("Action finished: %s", self)
+
+    del self.ui
+    self.ui = None
+
+    self.force_update()
 
   @staticmethod
   def force_update():
@@ -124,10 +156,10 @@ class Action(idaapi.action_handler_t):
     for when delayed actions modify the program and/or plugin state without
     IDA's awareness"""
     iwid_all = 0xFFFFFFFF
-    idaapi.request_refresh(iwid_all)
+    ida_kernwin.request_refresh(iwid_all)
 
 
-class IdbAction(Action):
+class IdbAction(IDAAction):
   """This action is only available when an idb file is loaded"""
   @staticmethod
   def enabled(ctx):
@@ -135,17 +167,19 @@ class IdbAction(Action):
     return bool(idc.GetIdbPath())
 
 
-class UnauthAction(Action):
+class UnauthAction(IDAAction):
   """This action is only available when a user is logged off"""
   @staticmethod
   def enabled(ctx):
+    del ctx
     return not bool(user['is_authenticated'])
 
 
-class AuthAction(Action):
+class AuthAction(IDAAction):
   """This action is only available when a user is logged in"""
   @staticmethod
   def enabled(ctx):
+    del ctx
     return bool(user['is_authenticated'])
 
 

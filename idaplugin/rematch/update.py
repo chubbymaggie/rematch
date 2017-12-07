@@ -1,5 +1,5 @@
 # objects
-from . import logger
+from . import log
 from . import config
 from . import network
 from . import exceptions
@@ -24,28 +24,29 @@ def check_update():
 
   url = "pypi/{package}/json".format(package=config['pypi']['package'])
 
-  network.delayed_query("GET", url, server=config['pypi']['server'], token="",
-                        json=True, callback=handle_update,
-                        exception_callback=handle_exception)
+  q = network.QueryWorker("GET", url, server=config['pypi']['server'],
+                          token="", json=True)
+  q.start(handle_update, handle_exception)
 
 
 def handle_update(response):
   local_version = StrictVersion(__version__)
-  remote_version = StrictVersion(response['info']['version'])
-  logger('update').info("local version: {}, latest version: {}"
-                        .format(local_version, remote_version))
+  raw_remote_version = response['info']['version']
+  remote_version = StrictVersion(raw_remote_version)
+  log('update').info("local version: %s, latest version: %s", local_version,
+                        remote_version)
 
   if remote_version < local_version:
-    logger('update').debug("You're using a version newer than latest")
+    log('update').debug("You're using a version newer than latest")
     return
   if remote_version == local_version:
-    logger('update').debug("Version is up to date")
+    log('update').debug("Version is up to date")
     return
 
-  logger('update').info("update is available")
+  log('update').info("update is available")
 
   if str(remote_version) in config['settings']['update']['skipped']:
-    logger('update').info("version update marked skip")
+    log('update').info("version update marked skip")
     return
 
   if config['settings']['update']['autoupdate']:
@@ -57,21 +58,21 @@ def handle_update(response):
                           .format(remote_version, local_version))
     if update == 0:
       config['settings']['update']['skipped'].append(str(remote_version))
-      logger('update').info("Version update suppressed")
+      log('update').info("Version update suppressed")
       return
     if update == -1:
       return
 
   # get latest version's package url
-  new_release = response['releases'][str(remote_version)]
+  new_release = response['releases'][raw_remote_version]
   new_url = new_release[0]['url']
   update_version(new_url)
 
 
 def update_version(url):
-  PACKAGE_PATH = '/idaplugin/'
+  package_path = '/idaplugin/'
 
-  logger('update').info("New version package url: {}".format(url))
+  log('update').info("New version package url: %s", url)
   package_download = urllib2.urlopen(url)
   temp_zip = tempfile.TemporaryFile()
   temp_dir = tempfile.mkdtemp()
@@ -79,13 +80,16 @@ def update_version(url):
   try:
     temp_zip.write(package_download.read())
     package_zip = zipfile.ZipFile(temp_zip)
-    files = [f for f in package_zip.namelist() if PACKAGE_PATH in f]
+    files = [f for f in package_zip.namelist() if package_path in f]
     package_zip.extractall(temp_dir, files)
 
     for filename in files:
       source = os.path.join(temp_dir, *filename.split('/'))
-      target_file_parts = filename.split(PACKAGE_PATH, 1)[1].split('/')
-      target = utils.getPluginBase(*target_file_parts)
+      target_file_parts = filename.split(package_path, 1)[1].split('/')
+      target = utils.get_plugin_base(*target_file_parts)
+      targetdir = os.path.dirname(target)
+      if not os.path.exists(targetdir):
+        os.makedirs(targetdir)
       shutil.move(source, target)
   finally:
     temp_zip.close()
@@ -94,6 +98,6 @@ def update_version(url):
 
 def handle_exception(exception):
   if isinstance(exception, exceptions.NotFoundException):
-    logger('update').info("Couldn't find latest release for plugin")
+    log('update').info("Couldn't find latest release for plugin")
   else:
-    logger('update').warning("Update check failed")
+    log('update').warning("Update check failed")

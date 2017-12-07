@@ -1,24 +1,29 @@
-services:
-  - mysql
-  - rabbitmq
-
 language: python
-python:
-  - "2.7"
-  - "3.4"
-  - "3.5"
-env:
-  - PROJECT=idaplugin COVERAGE='true'
-  - PROJECT=server COVERAGE='true'
 
 matrix:
-  # idaplugin is run with python2.7, we'll check against python3 to assert compatibility
-  exclude:
-    - python: "3.4"
-      env: PROJECT=idaplugin COVERAGE='true'
+  include:
+    - python: "2.7"
+      env: PROJECT=idaplugin
+    - python: "2.7"
+      env: PROJECT=server DJANGO_SETTINGS_MODULE='rematch.settings.debug'
+      services:
+        - mysql
+        - rabbitmq
+    - python: "3.5"
+      env: PROJECT=server DJANGO_SETTINGS_MODULE='rematch.settings.production'
+      services:
+        - mysql
+        - rabbitmq
+    - python: "2.7"
+      env: PROJECT=server DJANGO_SETTINGS_MODULE='rematch.settings.docker' ENV=docker
+      services: docker
+    - python: "2.7"
+      env: PROJECT=setup.py
+    - python: "3.6"
+      env: PROJECT=setup.py
 
 branches:
-  only: 
+  only:
     - master
 
 # Handle git submodules ourselves to replace ssh login with https login
@@ -30,38 +35,49 @@ before_install:
     - git submodule update --init --recursive
 
 install:
-  - if [ ${PROJECT} = "server" ]; then
-      set +vx;
-      if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-        wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
-      else
-        wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-      fi;
-      bash ./miniconda.sh -b -p ${HOME}/miniconda;
-      export PATH=${HOME}/miniconda/bin:$PATH;
-      conda info -a;
-      conda update --yes conda;
-      conda install --yes python=${TRAVIS_PYTHON_VERSION} atlas numpy scipy scikit-learn;
-    fi;
-  - if [ -f ${PROJECT}/requirements.txt ]; then pip install -r ${PROJECT}/requirements.txt ; fi
-  - if [ -f tests/requirements.txt ]; then pip install -r tests/requirements.txt ; fi
-  - pip install flake8
-  - if [[ $COVERAGE == 'true' ]]; then pip install pytest-cov coveralls ; fi
-
-before_script:
-  - if [ ${PROJECT} = "server" ]; then
-      mysql -e 'SHOW VARIABLES LIKE "%version%";' ;
-    fi;
-  - if [[ $COVERAGE == 'true' ]]; then
-      COVERAGE="--cov-report= --cov=$PROJECT" ;
+  - set +vx;
+  - pip install --upgrade pip setuptools wheel
+  - if [ "${ENV}" = "docker" ]; then
+      service docker start ;
+      docker-compose -f ./${PROJECT}/docker-compose.yml build ;
+      docker-compose -f ./${PROJECT}/docker-compose.yml up -d ;
+      if [ -f ./tests/${PROJECT}/requirements.txt ]; then
+        docker-compose -f ./${PROJECT}/docker-compose.yml exec web pip install -r ./tests/requirements.txt ;
+      fi ;
     else
-      COVERAGE="" ;
+      if [ "${PROJECT}" = "idaplugin" ]; then
+        wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
+        bash ./miniconda.sh -b -p "${HOME}/miniconda";
+        export PATH=${HOME}/miniconda/bin:$PATH;
+        conda info -a;
+        conda install --yes python=${TRAVIS_PYTHON_VERSION} pyqt;
+      else
+        pip install --only-binary=numpy,scipy numpy scipy ;
+      fi ;
+
+      if [ -f tests/${PROJECT}/requirements.txt ]; then
+        pip install -r tests/${PROJECT}/requirements.txt ;
+      fi ;
+      if [ -f "${PROJECT}/requirements.txt" ]; then
+        pip install -r "${PROJECT}/requirements.txt" ;
+      fi ;
     fi ;
+  - pip install flake8 coveralls pytest-cov ;
 
 script:
   - flake8 ./${PROJECT} --show-source --statistics
-  - if [ -d ./tests/${PROJECT} ]; then flake8 ./tests/${PROJECT} --show-source; fi
-  - if [ -d ./tests/${PROJECT} ]; then py.test ./${PROJECT} ./tests/${PROJECT} --verbose ${COVERAGE} ; fi
+  - if [ -d ./tests/${PROJECT} ]; then flake8 ./tests/${PROJECT} --show-source ; fi ;
+  - if [ -d ./tests/${PROJECT} ]; then
+      if [ "${ENV}" = "docker" ]; then
+        docker-compose -f ./${PROJECT}/docker-compose.yml exec web py.test ./ --verbose ;
+      else
+        PYTHONPATH=. py.test ./${PROJECT} ./tests/${PROJECT} --verbose --cov-report= --cov=$PROJECT ;
+      fi ;
+    fi ;
+  - if [ "${PROJECT}" = "setup.py" ]; then python ./setup.py server install ; fi ;
+  - if [ "${PROJECT}" = "setup.py" ]; then python ./setup.py idaplugin install ; fi ;
 
-after_success:
-  - coveralls
+after_script:
+  - if [ -d ./tests/${PROJECT} ] && [ "${ENV}" != "docker" ]; then
+      coveralls ;
+    fi ;

@@ -1,0 +1,2 @@
+pytest
+pytest-idapro>=0.1.16

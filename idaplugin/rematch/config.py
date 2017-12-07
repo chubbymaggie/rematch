@@ -1,12 +1,12 @@
 import os
 import json
 
-from . import logger
+from . import log
 
 
 class Config(dict):
   DEFAULT = {"debug": False,
-             "pypi": {"server": "http://testpypi.python.org",
+             "pypi": {"server": "http://pypi.python.org",
                       "package": "rematch-idaplugin"},
              "login": {"username": "",
                        "password": "",
@@ -30,16 +30,14 @@ class Config(dict):
       try:
         os.mkdir(self.user_config_dir)
       except OSError:
-        logger('config').warn("Could not create user configuration directory")
+        log('config').exception("Could not create user configuration "
+                                   "directory")
 
     if os.path.isfile(self.user_config_file):
       with open(self.user_config_file, 'r') as fh:
-        try:
-          _file = json.loads(fh.read())
-          new = self.merge_map(self.DEFAULT, _file)
-          self.update(new)
-        except Exception as ex:
-          logger('config').warn(ex)
+        _file = json.loads(fh.read())
+        new = self.merge_map(self.DEFAULT, _file)
+        self.update(new)
     else:
       self.update(self.DEFAULT)
 
@@ -60,12 +58,15 @@ class Config(dict):
       json_config = json.dumps(self, indent=4, sort_keys=True)
       with open(self.user_config_file, 'w') as fh:
         fh.write(json_config)
-    except:
-      logger('config').error("Could not save configuration file")
+    except Exception:
+      log('config').exception("Could not save configuration file")
 
   def __del__(self):
-    self.save()
-    super(Config, self).__del__()
+    try:
+      self.save()
+      super(Config, self).__del__()
+    except TypeError:
+      pass
 
 
 config = Config()

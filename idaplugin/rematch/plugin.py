@@ -1,22 +1,23 @@
 from idasix import QtCore, QtWidgets
 
-import idaapi
+import ida_idaapi
 
-from . import config, user, logger
+from . import config, user
 from . import actions
+from . import dialogs
 from . import update
 
 
-class RematchPlugin(idaapi.plugin_t):
+class RematchPlugin(ida_idaapi.plugin_t):
   # Load when IDA starts and don't unload until it exists
-  flags = idaapi.PLUGIN_FIX
+  flags = ida_idaapi.PLUGIN_FIX
   comment = "Rematch"
   help = ""
   wanted_name = "Rematch"
   wanted_hotkey = "Alt-F8"
 
-  def __init__(self):
-    idaapi.plugin_t.__init__(self)
+  def __init__(self, *args, **kwargs):
+    super(RematchPlugin, self).__init__(*args, **kwargs)
 
     self.mainwindow = None
     self.toolbar = None
@@ -30,7 +31,7 @@ class RematchPlugin(idaapi.plugin_t):
     update.check_update()
     self.setup()
 
-    return idaapi.PLUGIN_KEEP
+    return ida_idaapi.PLUGIN_KEEP
 
   def setup(self):
     if not self.get_mainwindow():
@@ -47,15 +48,16 @@ class RematchPlugin(idaapi.plugin_t):
     self.menu = QtWidgets.QMenu("Rematch")
     self.get_mainwindow().menuWidget().addMenu(self.menu)
 
-    actions.login.LoginAction.register()
-    actions.login.LogoutAction.register()
+    actions.login.LoginAction(dialogs.login.LoginDialog).register()
+    actions.login.LogoutAction(None).register()
 
-    actions.project.AddProjectAction.register()
-    actions.project.AddFileAction.register()
+    actions.project.AddProjectAction(dialogs.project.
+                                     AddProjectDialog).register()
+    actions.project.AddFileAction(dialogs.project.AddFileDialog).register()
 
-    actions.match.MatchAction.register()
+    actions.match.MatchAction(dialogs.match.MatchDialog).register()
 
-    actions.settings.SettingsAction.register()
+    actions.settings.SettingsAction(dialogs.settings.SettingsDialog).register()
 
     # set up status bar
     self.statusbar_label = QtWidgets.QLabel("Rematch loaded")
@@ -64,7 +66,7 @@ class RematchPlugin(idaapi.plugin_t):
     # start status bar periodic update
     self.statusbar_timer = QtCore.QTimer()
     self.statusbar_timer.setInterval(1000)
-    self.statusbar_timer.timeout.connect(lambda: self.update_statusbar())
+    self.statusbar_timer.timeout.connect(self.update_statusbar)
     self.statusbar_timer.start()
 
     self.timespent = QtWidgets.QProgressBar()
@@ -89,10 +91,10 @@ class RematchPlugin(idaapi.plugin_t):
       self.statusbar_label.setText("Rematch loaded")
 
   def delay_setup(self):
-    QtCore.QTimer.singleShot(1000, lambda: self.setup())
+    QtCore.QTimer.singleShot(1000, self.setup)
 
   def run(self, arg=0):
-    logger('main').debug("run with arg: {}".format(arg))
+    pass
 
   def term(self):
     if self.timespent_timer:
@@ -103,7 +105,8 @@ class RematchPlugin(idaapi.plugin_t):
       self.statusbar_timer.stop()
       self.statusbar_timer = None
 
-    if config['settings']['login']['autologout']:
+    if ('token' in config['login'] and
+        config['settings']['login']['autologout']):
       del config['login']['token']
     config.save()
 

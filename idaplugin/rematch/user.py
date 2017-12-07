@@ -1,7 +1,7 @@
 from . import exceptions
 from . import network
 
-from . import config, logger
+from . import config, log
 
 
 class User(dict):
@@ -25,11 +25,14 @@ class User(dict):
       if not config['settings']['login']['autologin']:
         return
 
-      if 'username' in config and 'password' in config and 'server' in config:
+      if ('login' in config and 'username' in config['login'] and
+          'password' in config['login'] and 'server' in config['login'] and
+          config['login']['username'] and config['login']['password'] and
+          config['login']['server']):
         self.login(config['login']['username'], config['login']['password'],
                    config['login']['server'])
-    except exceptions.RematchException as ex:
-      logger('user').debug(ex)
+    except exceptions.RematchException:
+      log('user').exception("Failed logging in at startup")
       self.update(self.LOGGEDOUT_USER)
 
   def login(self, username, password, server, success_callback=None,
@@ -39,9 +42,9 @@ class User(dict):
 
     # authenticate
     login_params = {'username': username, 'password': password}
-    network.delayed_query("POST", "accounts/login/", params=login_params,
-                          server=server, json=True, callback=self.handle_login,
-                          exception_callback=exception_callback)
+    q = network.QueryWorker("POST", "accounts/login/", params=login_params,
+                            server=server, json=True)
+    q.start(self.handle_login, exception_callback)
 
   def handle_login(self, response):
     config['login']['token'] = response['key']
@@ -51,8 +54,10 @@ class User(dict):
     self.refresh()
 
   def logout(self):
-    network.delayed_query("POST", "accounts/logout/", json=True)
-    del config['login']['token']
+    q = network.QueryWorker("POST", "accounts/logout/", json=True)
+    q.start()
+    if 'token' in config['login']:
+      del config['login']['token']
     self.clear()
     self.update(self.LOGGEDOUT_USER)
 
@@ -63,9 +68,8 @@ class User(dict):
     if not ('token' in config['login'] and config['login']['token']):
       return
 
-    network.delayed_query("GET", "accounts/profile/", json=True,
-                          callback=self.handle_refresh,
-                          exception_callback=self.handle_refresh_failure)
+    q = network.QueryWorker("GET", "accounts/profile/", json=True)
+    q.start(self.handle_refresh, self.handle_refresh_failure)
 
   def handle_refresh(self, response):
     self.update(response)
